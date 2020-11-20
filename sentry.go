@@ -41,10 +41,11 @@ type SentryHook struct {
 	client *raven.Client
 	levels []logrus.Level
 
-	serverName    string
-	ignoreFields  map[string]struct{}
-	extraFilters  map[string]func(interface{}) interface{}
-	errorHandlers []func(entry *logrus.Entry, err error)
+	serverName     string
+	ignoreFields   map[string]struct{}
+	extraFilters   map[string]func(interface{}) interface{}
+	errorHandlers  []func(entry *logrus.Entry, err error)
+	entriesFilters []func(*logrus.Entry) bool
 
 	asynchronous bool
 
@@ -177,6 +178,13 @@ func (hook *SentryHook) Fire(entry *logrus.Entry) error {
 				Type:      "error",
 				Message:   fmt.Sprintf("%+v", err),
 			}},
+		}
+	}
+
+	// check that entry passes all the filters
+	for _, filter := range hook.entriesFilters {
+		if filter(entry) {
+			return nil
 		}
 	}
 
@@ -368,6 +376,11 @@ func (hook *SentryHook) AddExtraFilter(name string, fn func(interface{}) interfa
 // AddErrorHandler adds a error handler function used when Sentry returns error.
 func (hook *SentryHook) AddErrorHandler(fn func(entry *logrus.Entry, err error)) {
 	hook.errorHandlers = append(hook.errorHandlers, fn)
+}
+
+// AddEntriesFilter adds a entries filter function. Allow to prevent sending some entries to sentry.
+func (hook *SentryHook) AddEntriesFilter(fn func(*logrus.Entry) bool) {
+	hook.entriesFilters = append(hook.entriesFilters, fn)
 }
 
 func (hook *SentryHook) formatExtraData(df *dataField) (result map[string]interface{}) {
